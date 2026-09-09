@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace CSharpConsumer.Models;
 
 public class ElasticReportDocument
@@ -14,6 +16,8 @@ public class ElasticReportDocument
     public string Message { get; set; } = string.Empty;
     public string SubjectId { get; set; } = string.Empty;
     public string SubjectType { get; set; } = string.Empty;
+
+    [JsonPropertyName("@timestamp")]
     public DateTime Timestamp { get; set; }
     public DateTime ProcessedAt { get; set; }
 }

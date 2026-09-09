@@ -34,7 +34,7 @@ class Program
         }
 
         var elasticService = new ElasticsearchService(esSettings.Uri, esSettings.IndexName);
-
+        await elasticService.InitializeIndexAsync();
         var consumerConfig = new ConsumerConfig
         {
             BootstrapServers = kafkaSettings.BootstrapServers,

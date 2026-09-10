@@ -1,5 +1,6 @@
 using Elastic.Clients.Elasticsearch;
 using Elastic.Clients.Elasticsearch.Inference;
+using FieldIntelligenceApi.Middlewares;
 using FieldIntelligenceApi.Models;
 using FieldIntelligenceApi.Repositories;
 
@@ -10,6 +11,8 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 var config = new ConfigurationBuilder()
     .SetBasePath(Directory.GetCurrentDirectory())
@@ -31,6 +34,7 @@ builder.Services.AddSingleton<IReportRepository,ReportRepository>();
 
 
 var app = builder.Build();
+app.UseExceptionHandler();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -42,7 +46,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();

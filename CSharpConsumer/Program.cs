@@ -1,40 +1,48 @@
 ﻿using System.ComponentModel.DataAnnotations;
-using System.Runtime.ConstrainedExecution;
 using System.Text.Json;
 using Confluent.Kafka;
 using CSharpConsumer.Models;
 using CSharpConsumer.Services;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging; // חובה להוסיף בשביל ILogger
 
 namespace CSharpConsumer;
 class Program
 {
     static async Task Main(string[] args)
     {
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.AddConsole();
+        });
+
+        var logger = loggerFactory.CreateLogger<Program>();
+        var esLogger = loggerFactory.CreateLogger<ElasticsearchService>();
+
         var config = new ConfigurationBuilder()
-        .SetBasePath(Directory.GetCurrentDirectory())
-        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-        .AddEnvironmentVariables()
-        .Build();
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .AddEnvironmentVariables()
+            .Build();
 
         var kafkaSettings = config.GetSection("Kafka").Get<KafkaSettings>();
         var esSettings = config.GetSection("Elasticsearch").Get<ElasticsearchSettings>();
 
-
         if (kafkaSettings == null)
         {
-            Console.WriteLine("Failed to load Kafka settings.");
+            logger.LogCritical("Failed to load Kafka settings.");
             return;
         }
 
         if (esSettings == null || string.IsNullOrWhiteSpace(esSettings.Uri))
         {
-            Console.WriteLine("Failed to load Elasticsearch settings from appsettings.json."); 
+            logger.LogCritical("Failed to load Elasticsearch settings from appsettings.json."); 
             return;
         }
 
-        var elasticService = new ElasticsearchService(esSettings.Uri, esSettings.IndexName);
+        var elasticService = new ElasticsearchService(esSettings.Uri, esSettings.IndexName, esLogger);
         await elasticService.InitializeIndexAsync();
+        
         var consumerConfig = new ConsumerConfig
         {
             BootstrapServers = kafkaSettings.BootstrapServers,
@@ -45,10 +53,10 @@ class Program
         using var consumer = new ConsumerBuilder<Ignore,string>(consumerConfig).Build();
         consumer.Subscribe(kafkaSettings.TopicName);
 
-        Console.WriteLine($"Subscribed to topic: {kafkaSettings.TopicName}");
-        Console.WriteLine("Waiting for reports...");
+        logger.LogInformation("Subscribed to topic: {TopicName}", kafkaSettings.TopicName);
+        logger.LogInformation("Waiting for reports...");
 
-    while (true)
+        while (true)
         {
             try
             {
@@ -58,11 +66,13 @@ class Program
                 {
                     continue;
                 }
+                
                 var message = result.Message.Value;
                 var jsonOptions = new JsonSerializerOptions 
                 { 
                     PropertyNameCaseInsensitive = true 
                 };
+                
                 var report = JsonSerializer.Deserialize<Report>(message, jsonOptions);
                 if (report == null)
                 {
@@ -79,23 +89,24 @@ class Program
                 if (hasSubjectId != hasSubjectType)
                 {
                     isValid = false;
-                    validationResults.Add(new ValidationResult("subjectId and subjectType must t appear together or be absent together."));
+                    validationResults.Add(new ValidationResult("subjectId and subjectType must appear together or be absent together."));
                 }
 
                 if (!isValid)
                 {
                     string reasons = string.Join(" | ", validationResults.Select(v => v.ErrorMessage));
-                    Console.WriteLine($"[Log - Rejected] Report {report.ReportId} rejected. Reasons: {reasons}");
+                    
+                    logger.LogWarning("Report rejected due to validation. Reason: {Reasons}. ReportId: {ReportId}", reasons, report.ReportId);
                     continue;
                 }
-                Console.WriteLine($"[+] Valid Report Received! ID: {report.ReportId}, Type: {report.ReportType}, Location: {report.Location}");
+                
+                logger.LogInformation("Valid Report Received! ID: {ReportId}, Type: {ReportType}, Location: {Location}", report.ReportId, report.ReportType, report.Location);
                 await elasticService.ProcessReportAsync(report);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Log - Error] System Exception: {ex.Message}");
+                logger.LogError(ex, "Failed to process message from Kafka.");
             }
         }
-
     }
 }

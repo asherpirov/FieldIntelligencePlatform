@@ -1,5 +1,6 @@
 using CSharpConsumer.Models;
 using Elastic.Clients.Elasticsearch;
+using Microsoft.Extensions.Logging; 
 
 namespace CSharpConsumer.Services;
 
@@ -7,13 +8,15 @@ public class ElasticsearchService
 {
     private readonly ElasticsearchClient _client;
     private readonly string _indexName;
+    private readonly ILogger<ElasticsearchService> _logger; 
 
-    public ElasticsearchService(string uri, string indexName)
+    public ElasticsearchService(string uri, string indexName, ILogger<ElasticsearchService> logger)
     {
         var settings = new ElasticsearchClientSettings(new Uri(uri))
             .DefaultIndex(indexName);
         _client = new ElasticsearchClient(settings);
         _indexName = indexName;
+        _logger = logger;
     }
 
     public async Task InitializeIndexAsync()
@@ -45,14 +48,15 @@ public class ElasticsearchService
 
             if (createResponse.IsValidResponse)
             {
-                Console.WriteLine($"[Elasticsearch] Index '{_indexName}' created successfully with mappings.");
+                _logger.LogInformation("Index '{IndexName}' created successfully with mappings.", _indexName);
             }
             else
             {
-                Console.WriteLine($"[Elasticsearch Error] Failed to create index: {createResponse.DebugInformation}");
+                _logger.LogError("Failed to communicate with Elasticsearch or external component. Index creation error: {Error}", createResponse.DebugInformation);
             }
         }
     }
+    
     public async Task ProcessReportAsync(Report report)
     {
         var elasticDoc = new ElasticReportDocument
@@ -77,15 +81,15 @@ public class ElasticsearchService
 
         if (response.IsValidResponse)
         {
-            Console.WriteLine($"[Elasticsearch] Report {report.ReportId} saved successfully");
+            _logger.LogInformation("Report {ReportId} saved successfully", report.ReportId);
         }
         else if (response.ElasticsearchServerError?.Status == 409)
         {
-            Console.WriteLine($"[Log - Duplicate] Report {report.ReportId} already exists in Elasticsearch. Skipping");
+            _logger.LogWarning("Duplicate report rejected because reportId already exists: {ReportId}", report.ReportId);
         }
         else
         {
-            Console.WriteLine($"[Elasticsearch Error] Failed to save {report.ReportId}: {response.DebugInformation}");
+            _logger.LogError("Failed to communicate with Elasticsearch or external component. Details: {DebugInformation}", response.DebugInformation);
         }
     }
 }

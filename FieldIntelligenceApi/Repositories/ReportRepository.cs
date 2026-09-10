@@ -226,5 +226,3 @@ public class ReportRepository : IReportRepository
         return result;
     }
 }
-
-       

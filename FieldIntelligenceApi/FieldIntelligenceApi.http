@@ -1,0 +1,6 @@
+@FieldIntelligenceApi_HostAddress = http://localhost:5084
+
+GET {{FieldIntelligenceApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

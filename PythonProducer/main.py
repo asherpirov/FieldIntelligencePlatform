@@ -7,7 +7,8 @@ from confluent_kafka import Producer
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
-conf = {"bootstrap.servers": "localhost:9092"}
+bootstrap_servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+conf = {"bootstrap.servers": bootstrap_servers}
 producer = Producer(conf)
 topic_name = "field-reports"
 
